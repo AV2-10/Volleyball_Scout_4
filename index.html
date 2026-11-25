@@ -482,10 +482,14 @@
 }
 
 .fullscreen-court canvas {
-  width: 100vw !important;
-  height: 100vh !important;
+  flex: 1 1 0;
+  min-width: 0;
+  width: auto !important;
+  height: auto !important;
+  align-self: stretch;
   max-width: none;
   max-height: none;
+  object-fit: fill;
 }
 
 #exitFullscreenBtn { display: none; }
@@ -502,6 +506,37 @@
   border: 1px solid #64748b;
   border-radius: 6px;
 }
+
+/* Scorebord bovenaan in het midden bij volledig veld */
+.fs-scoreboard { display: none; }
+.fullscreen-court .fs-scoreboard {
+  display: flex;
+  flex: 0 0 auto;
+  align-self: center;
+  box-sizing: border-box;
+  height: 56px;
+  margin-top: 8px;
+  z-index: 10000;
+  gap: 18px;
+  padding: 0 18px;
+  background: rgba(23, 32, 42, 0.92);
+  border: 1px solid #64748b;
+  border-radius: 10px;
+  color: white;
+}
+.fullscreen-court { justify-content: flex-start !important; }
+.fullscreen-court { height: 100vh; height: 100dvh; box-sizing: border-box; overflow: hidden; }
+.fullscreen-court .court-controls-layout { flex: 1 1 0; min-height: 0; width: 100%; padding: 6px 8px; box-sizing: border-box; align-items: stretch; }
+.fullscreen-court .side-controls { justify-content: center; }
+.fullscreen-court .court-info { display: none; }
+.fullscreen-court .fs-scoreboard .pts-display { font-size: 32px; min-width: 40px; }
+.fullscreen-court .fs-scoreboard .sets-display { font-size: 18px; }
+.fullscreen-court .fs-scoreboard .team-score { gap: 10px; }
+.fullscreen-court .fs-scoreboard .score-btn { font-size: 16px; padding: 6px 10px; }
+.fullscreen-court .fs-scoreboard .team-label { font-size: 16px; }
+.team-label { font-size: 12px; font-weight: bold; }
+.team-label.teamA { color: #60a5fa; }
+.team-label.teamB { color: #f87171; }
   </style>
 </head>
 <body>
@@ -760,25 +795,7 @@
       🏐 Eerste opslag: Team A
     </button>
 
-    <div class="scoreboard">
-      <div class="team-score">
-        <span style="font-size:12px;font-weight:bold;">A:</span>
-        <button class="score-btn sub" onclick="changePoints('A', -1)">-</button>
-        <span id="ptsA" class="pts-display">0</span>
-        <button class="score-btn" onclick="changePoints('A', 1)">+</button>
-      </div>
-
-      <div class="sets-display">
-        ( Sets: <span id="setsA">0</span> - <span id="setsB">0</span> )
-      </div>
-
-      <div class="team-score">
-        <button class="score-btn" onclick="changePoints('B', 1)">+</button>
-        <span id="ptsB" class="pts-display">0</span>
-        <button class="score-btn sub" onclick="changePoints('B', -1)">-</button>
-        <span style="font-size:12px;font-weight:bold;">:B</span>
-      </div>
-    </div>
+    <div class="scoreboard" id="scoreboardMain"></div>
 
     <button id="clearBtn" class="danger">Wis alle acties</button>
   </header>
@@ -798,6 +815,7 @@
 
   <div class="court-wrap" id="courtContainer">
     <button id="exitFullscreenBtn" onclick="toggleFullscreenCourt()" title="Terug naar normaal scherm">↙ Kleiner scherm</button>
+    <div class="scoreboard fs-scoreboard" id="scoreboardFull"></div>
     <div class="court-controls-layout">
       <!--Manual Rotate Left Side-->
       <div class="side-controls">
@@ -846,6 +864,7 @@
 <script>
 const canvas = document.getElementById('court'), ctx = canvas.getContext('2d');
 const scorePopup = document.getElementById('scorePopup');
+document.addEventListener('DOMContentLoaded', () => updateScoreboard());
 
 let activePlayer = null; 
 let pendingAction = null; 
@@ -2046,6 +2065,7 @@ function switchSides() {
   teamOnLeft = (teamOnLeft === 'A') ? 'B' : 'A';
   updateAllTeamRolesAndSwaps();
   cancelPendingAction();
+  updateScoreboard();
   drawCourt();
 }
 
@@ -2171,11 +2191,34 @@ function changePoints(side, delta) {
   drawCourt();
 }
 
+function scoreboardHTML() {
+  // Team aan de linkerkant van het veld staat links in het scorebord
+  const L = teamOnLeft;
+  const R = (teamOnLeft === 'A') ? 'B' : 'A';
+  const pts = { A: pointsA, B: pointsB };
+  const sets = { A: setsA, B: setsB };
+  return `
+    <div class="team-score">
+      <span class="team-label team${L}">${L}:</span>
+      <button class="score-btn sub" onclick="changePoints('${L}', -1)">-</button>
+      <span class="pts-display">${pts[L]}</span>
+      <button class="score-btn" onclick="changePoints('${L}', 1)">+</button>
+    </div>
+    <div class="sets-display">( Sets: ${sets[L]} - ${sets[R]} )</div>
+    <div class="team-score">
+      <button class="score-btn" onclick="changePoints('${R}', 1)">+</button>
+      <span class="pts-display">${pts[R]}</span>
+      <button class="score-btn sub" onclick="changePoints('${R}', -1)">-</button>
+      <span class="team-label team${R}">:${R}</span>
+    </div>`;
+}
+
 function updateScoreboard() {
-  document.getElementById('ptsA').textContent = pointsA;
-  document.getElementById('ptsB').textContent = pointsB;
-  document.getElementById('setsA').textContent = setsA;
-  document.getElementById('setsB').textContent = setsB;
+  const html = scoreboardHTML();
+  ['scoreboardMain', 'scoreboardFull'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = html;
+  });
 }
 
 function checkAndAutoScore(act) {
@@ -2448,7 +2491,6 @@ function drawCourt(skipLiveActionLines){
   const teamOnRight = (teamOnLeft === 'A') ? 'B' : 'A';
 
   ctx.fillStyle='#17202a'; ctx.font='bold 12px Arial';
-  ctx.fillText('NET', w/2-12, 16);
   ctx.fillText(`KANT ${teamOnLeft} ${homeTeamSide === teamOnLeft ? '🏠' : ''}`, x + cw*0.20 - 25, y - 6);
   ctx.fillText(`KANT ${teamOnRight} ${homeTeamSide === teamOnRight ? '🏠' : ''}`, x + cw*0.80 - 25, y - 6);
 
@@ -2826,6 +2868,16 @@ function cancelPendingAction() {
   drawCourt();
 }
 
+function fitFullscreenCanvas() {
+  if (!document.getElementById('courtContainer').classList.contains('fullscreen-court')) return;
+  const r = canvas.getBoundingClientRect();
+  canvas.width = Math.round(r.width);
+  canvas.height = Math.round(r.height);
+  drawCourt();
+}
+window.addEventListener('resize', fitFullscreenCanvas);
+window.addEventListener('orientationchange', () => setTimeout(fitFullscreenCanvas, 200));
+
 function toggleFullscreenCourt() {
   const court = document.getElementById('courtContainer');
   const header = document.querySelector('header');
@@ -2841,8 +2893,8 @@ function toggleFullscreenCourt() {
   stats.style.display = full ? 'none' : '';
 
   if (full) {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    // Canvas krijgt de ruimte die overblijft onder het scorebord; afmeting uitlezen na layout
+    requestAnimationFrame(fitFullscreenCanvas);
   } else {
     canvas.width = 800;
     canvas.height = 420;
