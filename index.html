@@ -537,6 +537,10 @@
 .team-label { font-size: 12px; font-weight: bold; }
 .team-label.teamA { color: #60a5fa; }
 .team-label.teamB { color: #f87171; }
+.lineup-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 6px; }
+.lineup-cell { display: flex; flex-direction: column; gap: 2px; font-size: 11px; font-weight: bold; color: #475569; }
+.lineup-cell select { width: 100%; min-width: 0; font-size: 12px; }
+.lineup-row-label { grid-column: 1 / -1; font-size: 10px; text-transform: uppercase; letter-spacing: .5px; color: #64748b; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -564,38 +568,11 @@
 
 <!-- New Set Positions Modal -->
 <div class="modal-overlay" id="setStartModal">
-  <div class="modal-content" style="max-width: 650px;">
+  <div class="modal-content" style="max-width: 820px; width: 96vw;">
     <div class="modal-header">
       <span id="setStartTitle">📋 Startposities Set</span>
     </div>
-    <div class="modal-body set-start-modal-body">
-      <div class="pos-section" style="border:none; padding:0;">
-        <strong style="color:#2563eb;">Startposities Team A</strong>
-        <div class="auto-setup-box">
-          <div class="auto-setup-row">
-            <span>Spelverdeler (S):</span>
-            <select class="posSelA_modal" data-type="S"></select>
-          </div>
-          <div class="auto-setup-row">
-            <span>Libero (L):</span>
-            <select class="posSelA_modal" data-type="L"></select>
-          </div>
-        </div>
-      </div>
-      <div class="pos-section" style="border:none; padding:0;">
-        <strong style="color:#dc2626;">Startposities Team B</strong>
-        <div class="auto-setup-box">
-          <div class="auto-setup-row">
-            <span>Spelverdeler (S):</span>
-            <select class="posSelB_modal" data-type="S"></select>
-          </div>
-          <div class="auto-setup-row">
-            <span>Libero (L):</span>
-            <select class="posSelB_modal" data-type="L"></select>
-          </div>
-        </div>
-      </div>
-    </div>
+    <div class="modal-body set-start-modal-body" id="setStartBody"></div>
     <div class="modal-footer">
       <button onclick="confirmSetPositions()" class="save-btn">Start Set</button>
     </div>
@@ -1524,32 +1501,73 @@ function resetFieldPositionsForSide(side) {
 
 function openSetStartModal() {
   const currentSetNum = setsA + setsB + 1;
-  document.getElementById('setStartTitle').textContent = `📋 Startposities Set ${currentSetNum}`;
-  
-  ['A', 'B'].forEach(side => {
-    populateSetModalDropdowns(side);
-  });
+  document.getElementById('setStartTitle').textContent = `📋 Opstelling Set ${currentSetNum}`;
+
+  const body = document.getElementById('setStartBody');
+  const leftSide = teamOnLeft;
+  const rightSide = (teamOnLeft === 'A') ? 'B' : 'A';
+
+  const sectionHTML = (side, courtLabel) => {
+    const color = side === 'A' ? '#2563eb' : '#dc2626';
+    const cell = pos => `<div class="lineup-cell">P${pos}<select class="lineupSel${side}_modal" data-pos="${pos}"></select></div>`;
+    return `
+      <div class="pos-section" style="border:none; padding:0;">
+        <strong style="color:${color};">Team ${side} (${courtLabel})</strong>
+        <div class="lineup-grid">
+          <div class="lineup-row-label">Voorste rij (bij het net)</div>
+          ${cell(4)}${cell(3)}${cell(2)}
+          <div class="lineup-row-label">Achterste rij</div>
+          ${cell(5)}${cell(6)}${cell(1)}
+        </div>
+        <div class="auto-setup-box" style="margin-top:8px;">
+          <div class="auto-setup-row">
+            <span>Spelverdeler (S):</span>
+            <select class="posSel${side}_modal" data-type="S"></select>
+          </div>
+          <div class="auto-setup-row">
+            <span>Libero (L):</span>
+            <select class="posSel${side}_modal" data-type="L"></select>
+          </div>
+        </div>
+      </div>`;
+  };
+
+  body.innerHTML = sectionHTML(leftSide, 'linkerkant') + sectionHTML(rightSide, 'rechterkant');
+
+  ['A', 'B'].forEach(side => populateSetModalDropdowns(side));
 
   document.getElementById('setStartModal').style.display = 'flex';
 }
 
 function populateSetModalDropdowns(side) {
   const sidePlayers = players.filter(p => p.side === side);
-  
+  const optionsAll = sidePlayers.map(p => `<option value="${p.number}">#${p.number} — ${p.name}</option>`).join('');
+
+  // Huidige opstelling uitlezen (libero telt niet mee als veldspeler)
+  const currentByPos = {};
+  sidePlayers.forEach(p => {
+    if (p.isLibero) return;
+    const pos = p.manualPos || p.posNum;
+    if (pos) currentByPos[pos] = p.number;
+  });
+
+  document.querySelectorAll(`.lineupSel${side}_modal`).forEach(sel => {
+    const pos = Number(sel.dataset.pos);
+    sel.innerHTML = '<option value="">-- Kies --</option>' + optionsAll;
+    if (currentByPos[pos]) sel.value = currentByPos[pos];
+  });
+
   document.querySelectorAll(`.posSel${side}_modal`).forEach(sel => {
     const type = sel.dataset.type;
     if (type === 'S') {
-      const preferred = sidePlayers.filter(p => p.isSetter || p.role === 'S');
-      const others = sidePlayers.filter(p => !(p.isSetter || p.role === 'S'));
-      const ordered = [...preferred, ...others];
-      sel.innerHTML = '<option value="">-- Kies S --</option>' + ordered.map(p => `<option value="${p.number}">#${p.number} — ${p.name}</option>`).join('');
-      if (preferred.length > 0) sel.value = preferred[0].number;
+      sel.innerHTML = '<option value="">-- Kies S --</option>' + optionsAll;
+      const current = sidePlayers.find(p => p.isSetter || p.role === 'S');
+      if (current) sel.value = current.number;
     } else if (type === 'L') {
-      const preferred = sidePlayers.filter(p => p.isLibero || p.role === 'L');
-      const others = sidePlayers.filter(p => !(p.isLibero || p.role === 'L'));
-      const ordered = [...preferred, ...others];
-      sel.innerHTML = '<option value="">-- Geen --</option>' + ordered.map(p => `<option value="${p.number}">#${p.number} — ${p.name}</option>`).join('');
-      if (preferred.length > 0) sel.value = preferred[0].number;
+      sel.innerHTML = '<option value="">-- Geen --</option>' + optionsAll;
+      const currentNr = activeLiberoNumber[side];
+      const current = (currentNr && sidePlayers.find(p => p.number === currentNr)) || sidePlayers.find(p => p.isLibero);
+      if (current) sel.value = current.number;
     }
   });
 }
@@ -1583,17 +1601,69 @@ function assignSetterLibero(side, setterNr, liberoNr) {
 }
 
 function confirmSetPositions() {
-  ['A', 'B'].forEach(side => {
-    let setterNr = null;
-    let liberoNr = null;
+  const setup = {};
 
+  // Eerst alles valideren, pas daarna iets toepassen
+  for (const side of ['A', 'B']) {
+    let setterNr = '', liberoNr = '';
     document.querySelectorAll(`.posSel${side}_modal`).forEach(sel => {
-      const type = sel.dataset.type;
-      if (type === 'S') setterNr = sel.value;
-      if (type === 'L') liberoNr = sel.value;
+      if (sel.dataset.type === 'S') setterNr = sel.value;
+      if (sel.dataset.type === 'L') liberoNr = sel.value;
+    });
+
+    const lineup = {};
+    document.querySelectorAll(`.lineupSel${side}_modal`).forEach(sel => {
+      lineup[Number(sel.dataset.pos)] = sel.value;
+    });
+
+    const chosen = Object.values(lineup).filter(v => v);
+    const eligible = players.filter(p => p.side === side && p.number !== liberoNr).length;
+    const needed = Math.min(6, eligible);
+
+    if (new Set(chosen).size !== chosen.length) {
+      alert(`Team ${side}: een speler staat meerdere keren in de opstelling.`);
+      return;
+    }
+    if (chosen.length < needed) {
+      alert(`Team ${side}: vul alle posities van de opstelling in.`);
+      return;
+    }
+    if (liberoNr && chosen.includes(liberoNr)) {
+      alert(`Team ${side}: de libero kan niet ook op een veldpositie staan.`);
+      return;
+    }
+    if (setterNr && chosen.length > 0 && !chosen.includes(setterNr)) {
+      alert(`Team ${side}: de spelverdeler moet in de opstelling staan.`);
+      return;
+    }
+    setup[side] = { setterNr, liberoNr, lineup };
+  }
+
+  ['A', 'B'].forEach(side => {
+    const { setterNr, liberoNr, lineup } = setup[side];
+    const sidePlayers = players.filter(p => p.side === side);
+
+    // Alle spelers eerst van het veld halen
+    sidePlayers.forEach(p => {
+      p.posNum = null;
+      delete p.manualPos;
+      p.position = null;
+      p.onBench = true;
     });
 
     assignSetterLibero(side, setterNr, liberoNr);
+
+    // Gekozen opstelling plaatsen
+    Object.keys(lineup).forEach(posKey => {
+      const nr = lineup[posKey];
+      if (!nr) return;
+      const p = sidePlayers.find(pl => pl.number === nr);
+      if (p) {
+        p.posNum = Number(posKey);
+        p.onBench = false;
+      }
+    });
+
     updateDropdownsFromPositions(side);
   });
 
