@@ -487,6 +487,21 @@
   max-width: none;
   max-height: none;
 }
+
+#exitFullscreenBtn { display: none; }
+.fullscreen-court #exitFullscreenBtn {
+  display: block;
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 10000;
+  padding: 6px 10px;
+  font-size: 12px;
+  background: rgba(23, 32, 42, 0.9);
+  color: white;
+  border: 1px solid #64748b;
+  border-radius: 6px;
+}
   </style>
 </head>
 <body>
@@ -782,6 +797,7 @@
   </div>
 
   <div class="court-wrap" id="courtContainer">
+    <button id="exitFullscreenBtn" onclick="toggleFullscreenCourt()" title="Terug naar normaal scherm">↙ Kleiner scherm</button>
     <div class="court-controls-layout">
       <!--Manual Rotate Left Side-->
       <div class="side-controls">
